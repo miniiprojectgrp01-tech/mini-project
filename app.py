@@ -97,13 +97,13 @@ def start_scan():
 
         db.execute('''
             UPDATE scans SET
-                status='completed', risk_score=?, risk_level=?, summary=?,
+                url=?, status='completed', risk_score=?, risk_level=?, summary=?,
                 vulnerabilities=?, headers_analysis=?, total_vulns=?,
                 critical_count=?, high_count=?, medium_count=?,
                 low_count=?, info_count=?, scan_duration=?
             WHERE id=?
         ''', (
-            result.get('risk_score', 0), result.get('risk_level', 'low'),
+            result.get('final_url', url), result.get('risk_score', 0), result.get('risk_level', 'low'),
             result.get('summary', ''), json.dumps(result.get('vulnerabilities', [])),
             json.dumps(result.get('headers_analysis', {})), len(vulns),
             counts['critical'], counts['high'], counts['medium'],
@@ -389,11 +389,22 @@ def run_ai_scan(url):
     api_key = os.environ.get('GROQ_API_KEY', '')
 
     real_headers, status_code = fetch_real_headers(url)
+    
+    # NEW: Fallback to HTTP if HTTPS fails
+    if not real_headers and url.startswith('https://'):
+        fallback_url = url.replace('https://', 'http://', 1)
+        fallback_headers, fallback_status = fetch_real_headers(fallback_url)
+        if fallback_headers:
+            url = fallback_url
+            real_headers = fallback_headers
+            status_code = fallback_status
+
     if not real_headers:
         return {'risk_score': 0, 'risk_level': 'low',
                 'summary': f'Could not connect to {url}. Please check the URL and try again.',
                 'scan_duration_seconds': 1, 'vulnerabilities': [], 'headers_analysis': {}}
 
+    result_url = url
     # Run all 9 checks
     vulnerabilities = []
     vulnerabilities.extend(check_security_headers(real_headers))
