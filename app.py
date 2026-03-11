@@ -61,9 +61,6 @@ def init_db():
     ''')
     db.commit()
 
-with app.app_context():
-    init_db()
-
 
 @app.route('/')
 def index():
